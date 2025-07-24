@@ -8,7 +8,7 @@ app_license = "unlicense"
 # Apps
 # ------------------
 
-# required_apps = []
+required_apps = ["frappe"]
 
 # Each item in the list will be shown as an app in the apps page
 # add_to_apps_screen = [
@@ -26,7 +26,11 @@ app_license = "unlicense"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/sentra_core/css/sentra_core.css"
-# app_include_js = "/assets/sentra_core/js/sentra_core.js"
+app_include_js = [
+    "/assets/sentra_core/js/contact_override.js",
+    "/assets/sentra_core/js/communication_override.js",
+    "/assets/sentra_core/js/list_view_override.js"
+]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/sentra_core/css/sentra_core.css"
@@ -43,8 +47,11 @@ app_license = "unlicense"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
-# doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
+doctype_js = {
+    "Contact" : "public/js/contact.js",
+    "Communication": "public/js/communication.js"
+}
+doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
 
@@ -86,7 +93,7 @@ app_license = "unlicense"
 # ------------
 
 # before_install = "sentra_core.install.before_install"
-# after_install = "sentra_core.install.after_install"
+after_install = "sentra_core.install.after_install"
 
 # Uninstallation
 # ------------
@@ -99,8 +106,11 @@ app_license = "unlicense"
 # To set up dependencies/integrations with other apps
 # Name of the app being installed is passed as an argument
 
-# before_app_install = "sentra_core.utils.before_app_install"
+before_app_install = "sentra_core.overrides.override_email_functions"
 # after_app_install = "sentra_core.utils.after_app_install"
+
+# Boot session overrides
+boot_session = "sentra_core.overrides.override_email_functions"
 
 # Integration Cleanup
 # -------------------
@@ -132,13 +142,18 @@ app_license = "unlicense"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+    "User": {
+        "after_insert": "sentra_core.overrides.user.after_insert"
+    },
+    "Contact": {
+        "validate": "sentra_core.overrides.contact.validate",
+        "on_update": "sentra_core.overrides.contact.on_update"
+    },
+    "Communication": {
+        "validate": "sentra_core.overrides.communication.validate"
+    }
+}
 
 # Scheduled Tasks
 # ---------------
@@ -169,9 +184,11 @@ app_license = "unlicense"
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "sentra_core.event.get_events"
-# }
+override_whitelisted_methods = {
+    "frappe.desk.listview.get_list_settings": "sentra_core.overrides.listview.get_list_settings",
+    "frappe.desk.listview.set_list_settings": "sentra_core.overrides.listview.set_list_settings",
+    "frappe.desk.listview.get_all_list_settings": "sentra_core.overrides.listview.get_all_list_settings"
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
@@ -232,6 +249,23 @@ app_license = "unlicense"
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True
+
+# Fixtures
+# --------
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [
+            ["dt", "in", ["Contact", "Communication", "User"]]
+        ]
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [
+            ["doc_type", "in", ["Contact", "Communication", "List View Settings"]]
+        ]
+    }
+]
 
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs

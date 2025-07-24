@@ -1,0 +1,10 @@
+{
+ "category": "Modules",
+ "color": "#00bcd4",
+ "developer_mode_only": 0,
+ "doctype": "Module Def",
+ "icon": "octicon octicon-package",
+ "is_default": 0,
+ "module_name": "Sentra Core",
+ "restrict_to_domain": ""
+}

@@ -4,3 +4,5 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
+sentra_core.patches.remove_user_phone_field
+sentra_core.patches.reduce_gender_options
