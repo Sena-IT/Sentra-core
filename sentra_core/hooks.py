@@ -138,6 +138,14 @@ boot_session = "sentra_core.overrides.override_email_functions"
 # 	"Event": "frappe.desk.doctype.event.event.has_permission",
 # }
 
+# DocType Class
+# ---------------
+# Override standard doctype classes
+
+override_doctype_class = {
+	"Contact": "sentra_core.overrides.contact.CustomContact",
+}
+
 # Document Events
 # ---------------
 # Hook on document methods and events
@@ -148,7 +156,8 @@ doc_events = {
     },
     "Contact": {
         "validate": "sentra_core.overrides.contact.validate",
-        "on_update": "sentra_core.overrides.contact.on_update"
+        "on_update": "sentra_core.overrides.contact.on_update",
+        "before_delete": "sentra_core.overrides.contact.before_delete"
     },
     "Communication": {
         "validate": "sentra_core.overrides.communication.validate"
@@ -253,6 +262,7 @@ override_whitelisted_methods = {
 # Fixtures
 # --------
 fixtures = [
+    "custom_fields",
     {
         "dt": "Custom Field",
         "filters": [

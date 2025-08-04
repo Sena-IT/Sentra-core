@@ -1,0 +1,258 @@
+[
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-contact_type",
+        "fieldname": "contact_type",
+        "fieldtype": "Link",
+        "label": "Contact Type",
+        "options": "Contact Type",
+        "insert_after": "user"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-contact_category",
+        "fieldname": "contact_category",
+        "fieldtype": "Link",
+        "label": "Contact Category",
+        "options": "Contact Category",
+        "insert_after": "contact_type"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-representatives",
+        "fieldname": "representatives",
+        "fieldtype": "Table",
+        "label": "Representatives",
+        "options": "Organization Representative",
+        "insert_after": "contact_category"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-dob",
+        "fieldname": "dob",
+        "fieldtype": "Date",
+        "label": "Date of Birth",
+        "insert_after": "representatives"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-notes",
+        "fieldname": "notes",
+        "fieldtype": "Long Text",
+        "label": "Notes",
+        "insert_after": "dob"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-address_line1",
+        "fieldname": "address_line1",
+        "fieldtype": "Data",
+        "label": "Address Line 1",
+        "insert_after": "notes"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-address_line2",
+        "fieldname": "address_line2",
+        "fieldtype": "Data",
+        "label": "Address Line 2",
+        "insert_after": "address_line1"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-city",
+        "fieldname": "city",
+        "fieldtype": "Data",
+        "label": "City",
+        "insert_after": "address_line2"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-state",
+        "fieldname": "state",
+        "fieldtype": "Data",
+        "label": "State",
+        "insert_after": "city"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-country",
+        "fieldname": "country",
+        "fieldtype": "Data",
+        "label": "Country",
+        "insert_after": "state"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-gstin",
+        "fieldname": "gstin",
+        "fieldtype": "Data",
+        "label": "GSTIN",
+        "insert_after": "country"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-pincode",
+        "fieldname": "pincode",
+        "fieldtype": "Data",
+        "label": "Pincode",
+        "insert_after": "gstin"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-vendor_type",
+        "fieldname": "vendor_type",
+        "fieldtype": "Link",
+        "label": "Vendor Type",
+        "options": "Vendor Type",
+        "insert_after": "pincode"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-instagram",
+        "fieldname": "instagram",
+        "fieldtype": "Data",
+        "label": "Instagram",
+        "insert_after": "gender"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-website",
+        "fieldname": "website",
+        "fieldtype": "Data",
+        "label": "Website",
+        "insert_after": "instagram"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-employee_code",
+        "fieldname": "employee_code",
+        "fieldtype": "Data",
+        "label": "Employee Code",
+        "insert_after": "image"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-date_of_joining",
+        "fieldname": "date_of_joining",
+        "fieldtype": "Date",
+        "label": "Date of Joining",
+        "insert_after": "employee_code"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-employee_status",
+        "fieldname": "employee_status",
+        "fieldtype": "Select",
+        "label": "Employee Status",
+        "options": "Active\nInactive",
+        "insert_after": "date_of_joining"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-manager",
+        "fieldname": "manager",
+        "fieldtype": "Link",
+        "label": "Manager",
+        "options": "Contact",
+        "insert_after": "employee_status"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-work_email",
+        "fieldname": "work_email",
+        "fieldtype": "Data",
+        "label": "Work Email",
+        "options": "Email",
+        "insert_after": "manager"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-user_role",
+        "fieldname": "user_role",
+        "fieldtype": "Link",
+        "label": "User Role",
+        "options": "Role",
+        "insert_after": "work_email"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-travel_approval_limit",
+        "fieldname": "travel_approval_limit",
+        "fieldtype": "Currency",
+        "label": "Travel Approval Limit",
+        "insert_after": "user_role"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-booking_permissions",
+        "fieldname": "booking_permissions",
+        "fieldtype": "Select",
+        "label": "Booking Permissions",
+        "options": "Self Only\nTeam\nDepartment\nAll",
+        "insert_after": "travel_approval_limit"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-direct_supervisor",
+        "fieldname": "direct_supervisor",
+        "fieldtype": "Link",
+        "label": "Direct Supervisor",
+        "options": "Contact",
+        "insert_after": "booking_permissions"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-identity_documents",
+        "fieldname": "identity_documents",
+        "fieldtype": "JSON",
+        "label": "Identity Documents",
+        "permlevel": 1,
+        "insert_after": "direct_supervisor"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-travel_documents",
+        "fieldname": "travel_documents",
+        "fieldtype": "JSON",
+        "label": "Travel Documents",
+        "permlevel": 1,
+        "insert_after": "identity_documents"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
+        "name": "Contact-additional_documents",
+        "fieldname": "additional_documents",
+        "fieldtype": "JSON",
+        "label": "Additional Documents",
+        "permlevel": 1,
+        "insert_after": "travel_documents"
+    }
+]
