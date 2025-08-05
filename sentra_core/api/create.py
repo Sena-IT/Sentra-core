@@ -10,26 +10,50 @@ from datetime import datetime
 
 
 @frappe.whitelist()
-def create_document(doctype: str, data: Dict[str, Any]) -> Dict[str, Any]:
+def create_document(doctype: str, data: Dict[str, Any], skip_validation: bool = False) -> Dict[str, Any]:
     """
-    Create a single document of any doctype
+    Create a single document of any doctype with automatic validation
     
     Args:
         doctype: The DocType to create
         data: Document data including all fields
+        skip_validation: Skip pre-validation (use Frappe's validation only)
         
     Returns:
-        Created document
+        Created document or validation errors
     """
     try:
         # Parse data if it's a string
         if isinstance(data, str):
             data = json.loads(data)
+        
+        # Skip validation if requested (for backward compatibility)
+        if not skip_validation:
+            # Get schema and validate
+            validation_result = validate_document_data(doctype, data)
             
-        # Create document
+            if not validation_result["success"]:
+                return {
+                    "success": False,
+                    "message": "Validation failed",
+                    "validation_errors": validation_result["errors"],
+                    "validation_warnings": validation_result["warnings"],
+                    "data": None
+                }
+            
+            # Process the data based on schema to handle type conversions and clean data
+            schema = get_doctype_create_schema(doctype)
+            if schema["success"]:
+                cleaned_data = _clean_and_convert_data(data, schema["data"]["fields"])
+            else:
+                cleaned_data = data
+        else:
+            cleaned_data = data
+            
+        # Create document with cleaned data
         doc = frappe.get_doc({
             "doctype": doctype,
-            **data
+            **cleaned_data
         })
         
         doc.insert()
@@ -42,10 +66,97 @@ def create_document(doctype: str, data: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as e:
         frappe.db.rollback()
+        
+        # Try to extract more specific error information
+        error_message = str(e)
+        validation_errors = []
+        
+        # Parse common Frappe validation errors
+        if "Missing mandatory fields" in error_message:
+            # Extract field names from error
+            import re
+            fields = re.findall(r'\[(.*?)\]', error_message)
+            if fields:
+                validation_errors = [f"{field} is required" for field in fields[0].split(", ")]
+        elif "already exists" in error_message:
+            validation_errors = ["A record with this value already exists"]
+        elif "does not exist" in error_message:
+            validation_errors = [error_message]
+            
         return {
             "success": False,
-            "message": str(e)
+            "message": error_message,
+            "validation_errors": validation_errors,
+            "data": None
         }
+
+
+def _clean_and_convert_data(data: Dict[str, Any], fields: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Clean and convert data based on field types
+    
+    Args:
+        data: Raw input data
+        fields: Field definitions from schema
+        
+    Returns:
+        Cleaned data with proper types
+    """
+    cleaned = {}
+    fields_map = {f["fieldname"]: f for f in fields}
+    
+    for key, value in data.items():
+        if key in fields_map:
+            field = fields_map[key]
+            
+            # Skip read-only fields
+            if field.get("read_only"):
+                continue
+                
+            # Skip None values
+            if value is None:
+                continue
+                
+            # Type conversion
+            try:
+                if field["fieldtype"] == "Int" and value is not None:
+                    cleaned[key] = int(value)
+                elif field["fieldtype"] in ["Float", "Currency"] and value is not None:
+                    cleaned[key] = float(value)
+                elif field["fieldtype"] == "Check":
+                    # Handle various boolean representations
+                    if isinstance(value, str):
+                        cleaned[key] = 1 if value.lower() in ["true", "1", "yes", "on"] else 0
+                    else:
+                        cleaned[key] = 1 if value else 0
+                elif field["fieldtype"] == "Date" and isinstance(value, str):
+                    # Validate date format
+                    import re
+                    if re.match(r'^\d{4}-\d{2}-\d{2}$', value):
+                        cleaned[key] = value
+                    else:
+                        # Try to parse common date formats
+                        from datetime import datetime
+                        for fmt in ["%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"]:
+                            try:
+                                date_obj = datetime.strptime(value, fmt)
+                                cleaned[key] = date_obj.strftime("%Y-%m-%d")
+                                break
+                            except:
+                                continue
+                        else:
+                            cleaned[key] = value  # Let Frappe handle the error
+                else:
+                    # For all other types, keep as is
+                    cleaned[key] = value
+            except (ValueError, TypeError):
+                # If conversion fails, keep original value and let Frappe validate
+                cleaned[key] = value
+        else:
+            # Include fields not in schema (might be valid system fields)
+            cleaned[key] = value
+            
+    return cleaned
 
 
 @frappe.whitelist()
@@ -128,99 +239,6 @@ def bulk_upload_documents(
         }
     except Exception as e:
         frappe.db.rollback()
-        return {
-            "success": False,
-            "message": str(e)
-        }
-
-
-@frappe.whitelist()
-def create_document_from_unstructured_data(
-    doctype: str,
-    unstructured_data: str,
-    data_type: str = "text",
-    parsing_rules: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """
-    Create document from unstructured data using AI parsing or rule-based extraction
-    
-    Args:
-        doctype: The DocType to create
-        unstructured_data: Raw text, business card info, email signature, etc.
-        data_type: Type of data (text, business_card, email_signature, json, xml)
-        parsing_rules: Optional rules for parsing specific fields
-        
-    Returns:
-        Created document or parsed data for review
-    """
-    try:
-        parsed_data = {
-            "doctype": doctype
-        }
-        
-        # Parse based on data type
-        if data_type == "json":
-            try:
-                parsed_data.update(json.loads(unstructured_data))
-            except:
-                pass
-                
-        elif data_type == "xml":
-            # Basic XML parsing could be added here
-            pass
-            
-        else:
-            # Basic text parsing with common patterns
-            lines = unstructured_data.strip().split('\n')
-            
-            # Get doctype meta to understand available fields
-            meta = frappe.get_meta(doctype)
-            field_map = {field.fieldname: field for field in meta.fields}
-            
-            # Apply parsing rules if provided
-            if parsing_rules and isinstance(parsing_rules, str):
-                parsing_rules = json.loads(parsing_rules)
-            
-            # Common patterns
-            for line in lines:
-                line = line.strip()
-                
-                # Email pattern
-                if '@' in line:
-                    # Look for email fields
-                    email_fields = [f for f in field_map.keys() if 'email' in f.lower()]
-                    if email_fields:
-                        parsed_data[email_fields[0]] = line
-                    elif 'email_id' in field_map:
-                        parsed_data['email_id'] = line
-                            
-                # Phone pattern
-                elif (line.startswith('+') or any(char.isdigit() for char in line)) and len([char for char in line if char.isdigit()]) >= 10:
-                    # Look for mobile/phone fields
-                    mobile_fields = [f for f in field_map.keys() if any(term in f.lower() for term in ['mobile', 'phone'])]
-                    if mobile_fields:
-                        # Prefer mobile_no over other fields
-                        if 'mobile_no' in mobile_fields:
-                            parsed_data['mobile_no'] = line
-                        else:
-                            parsed_data[mobile_fields[0]] = line
-                            
-                # Apply custom parsing rules
-                if parsing_rules:
-                    for field, rule in parsing_rules.items():
-                        if isinstance(rule, dict) and "pattern" in rule:
-                            import re
-                            match = re.search(rule["pattern"], line)
-                            if match:
-                                parsed_data[field] = match.group(1) if match.groups() else match.group(0)
-                                
-        return {
-            "success": True,
-            "message": _("Data parsed successfully"),
-            "data": parsed_data,
-            "require_confirmation": True  # Frontend should confirm before creating
-        }
-    except Exception as e:
         return {
             "success": False,
             "message": str(e)
@@ -333,6 +351,285 @@ def duplicate_document(
         }
     except Exception as e:
         frappe.db.rollback()
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+
+@frappe.whitelist()
+def get_doctype_create_schema(doctype: str) -> Dict[str, Any]:
+    """
+    Get comprehensive schema information for creating documents
+    
+    Args:
+        doctype: The DocType to get schema for
+        
+    Returns:
+        Complete field information including validation rules
+    """
+    try:
+        meta = frappe.get_meta(doctype)
+        
+        fields_info = []
+        for field in meta.fields:
+            if field.fieldtype in ["Section Break", "Column Break", "HTML", "Table"]:
+                continue
+                
+            field_info = {
+                "fieldname": field.fieldname,
+                "label": field.label,
+                "fieldtype": field.fieldtype,
+                "reqd": field.reqd,
+                "unique": field.unique,
+                "read_only": field.read_only,
+                "options": field.options,  # For Link fields, this is the linked DocType
+                "default": field.default,
+                "max_length": getattr(field, 'length', None),
+                "precision": getattr(field, 'precision', None),
+                "validation_pattern": None,
+                "allowed_values": None
+            }
+            
+            # Add validation patterns for common types
+            if field.fieldtype == "Email":
+                field_info["validation_pattern"] = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+            elif field.fieldtype == "Phone":
+                field_info["validation_pattern"] = r"^[\d\s\-\+\(\)]+$"
+            elif field.fieldtype == "Int":
+                field_info["validation_pattern"] = r"^\d+$"
+            elif field.fieldtype == "Float" or field.fieldtype == "Currency":
+                field_info["validation_pattern"] = r"^\d+\.?\d*$"
+            
+            # For Select fields, get the options
+            if field.fieldtype == "Select" and field.options:
+                field_info["allowed_values"] = [opt.strip() for opt in field.options.split("\n") if opt.strip()]
+            
+            # Add any custom validation from field
+            if hasattr(field, 'mandatory_depends_on'):
+                field_info["mandatory_depends_on"] = field.mandatory_depends_on
+            if hasattr(field, 'depends_on'):
+                field_info["depends_on"] = field.depends_on
+                
+            fields_info.append(field_info)
+        
+        # Get any custom validation methods
+        custom_validations = []
+        try:
+            doc_module = frappe.get_module(f"{meta.module}.doctype.{frappe.scrub(doctype)}.{frappe.scrub(doctype)}")
+            if hasattr(doc_module, doctype):
+                doc_class = getattr(doc_module, doctype)
+                if hasattr(doc_class, 'validate'):
+                    custom_validations.append("Custom validate method exists")
+        except:
+            pass
+        
+        return {
+            "success": True,
+            "data": {
+                "doctype": doctype,
+                "fields": fields_info,
+                "required_fields": [f["fieldname"] for f in fields_info if f["reqd"]],
+                "unique_fields": [f["fieldname"] for f in fields_info if f["unique"]],
+                "read_only_fields": [f["fieldname"] for f in fields_info if f["read_only"]],
+                "link_fields": {
+                    f["fieldname"]: f["options"] 
+                    for f in fields_info 
+                    if f["fieldtype"] == "Link"
+                },
+                "naming_rule": meta.naming_rule,
+                "title_field": meta.title_field,
+                "custom_validations": custom_validations,
+                "child_tables": [
+                    {
+                        "fieldname": f.fieldname,
+                        "label": f.label,
+                        "child_doctype": f.options
+                    }
+                    for f in meta.fields 
+                    if f.fieldtype == "Table"
+                ]
+            }
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+
+@frappe.whitelist()
+def validate_document_data(doctype: str, data: Dict[str, Any], skip_required: bool = False) -> Dict[str, Any]:
+    """
+    Pre-validate document data before creation
+    
+    Args:
+        doctype: The DocType to validate against
+        data: The data to validate
+        skip_required: Skip required field validation (useful for drafts)
+        
+    Returns:
+        Validation results with specific errors
+    """
+    try:
+        if isinstance(data, str):
+            data = json.loads(data)
+            
+        errors = []
+        warnings = []
+        
+        # Get schema
+        schema = get_doctype_create_schema(doctype)
+        if not schema["success"]:
+            return schema
+            
+        fields_map = {f["fieldname"]: f for f in schema["data"]["fields"]}
+        
+        # Check for unknown fields
+        for fieldname in data.keys():
+            if fieldname not in fields_map and fieldname not in ["doctype"]:
+                warnings.append(f"Unknown field: {fieldname}")
+        
+        # Validate each field
+        for field_info in schema["data"]["fields"]:
+            fieldname = field_info["fieldname"]
+            value = data.get(fieldname)
+            
+            # Required field check
+            if not skip_required and field_info["reqd"]:
+                # Check for empty values more thoroughly
+                if value is None or value == "":
+                    errors.append(f"{field_info['label']} is required")
+                    continue
+                # For string fields, also check whitespace-only
+                if isinstance(value, str) and not value.strip():
+                    errors.append(f"{field_info['label']} cannot be empty or whitespace only")
+                    continue
+                
+            # Skip if no value provided
+            if value is None:
+                continue
+                
+            # Read-only check
+            if field_info["read_only"]:
+                warnings.append(f"{field_info['label']} is read-only and will be ignored")
+                continue
+            
+            # Type validation
+            if field_info["fieldtype"] == "Int":
+                try:
+                    int(value)
+                except:
+                    errors.append(f"{field_info['label']} must be an integer, got: {type(value).__name__}")
+                    
+            elif field_info["fieldtype"] in ["Float", "Currency", "Percent"]:
+                try:
+                    float(value)
+                except:
+                    errors.append(f"{field_info['label']} must be a number, got: {type(value).__name__}")
+                    
+            elif field_info["fieldtype"] == "Check":
+                # Accept various boolean representations
+                valid_values = [0, 1, True, False, "0", "1", "true", "false", "True", "False", "yes", "no", "on", "off"]
+                if value not in valid_values:
+                    errors.append(f"{field_info['label']} must be a boolean value (0/1, true/false, yes/no)")
+                    
+            elif field_info["fieldtype"] == "Date":
+                import re
+                from datetime import datetime
+                valid_date = False
+                
+                # Check standard format
+                if re.match(r'^\d{4}-\d{2}-\d{2}$', str(value)):
+                    valid_date = True
+                else:
+                    # Try parsing common formats
+                    for fmt in ["%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"]:
+                        try:
+                            datetime.strptime(str(value), fmt)
+                            valid_date = True
+                            warnings.append(f"{field_info['label']} will be converted to YYYY-MM-DD format")
+                            break
+                        except:
+                            continue
+                
+                if not valid_date:
+                    errors.append(f"{field_info['label']} must be a valid date (YYYY-MM-DD format preferred)")
+                    
+            elif field_info["fieldtype"] == "Datetime":
+                import re
+                if not re.match(r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}', str(value)):
+                    errors.append(f"{field_info['label']} must be in YYYY-MM-DD HH:MM:SS format")
+                    
+            elif field_info["fieldtype"] == "Time":
+                import re
+                if not re.match(r'^\d{2}:\d{2}:\d{2}', str(value)):
+                    errors.append(f"{field_info['label']} must be in HH:MM:SS format")
+                    
+            elif field_info["fieldtype"] == "Select" and field_info.get("allowed_values"):
+                if value not in field_info["allowed_values"]:
+                    errors.append(f"{field_info['label']} must be one of: {', '.join(field_info['allowed_values'])}")
+                    
+            elif field_info["fieldtype"] == "Link":
+                # Check if it's a valid string (link validation happens in Frappe)
+                if not isinstance(value, str) or not value.strip():
+                    errors.append(f"{field_info['label']} must be a valid {field_info.get('options', 'reference')}")
+                else:
+                    # Could add check if linked document exists
+                    warnings.append(f"{field_info['label']} link validity will be checked during creation")
+                    
+            elif field_info["fieldtype"] == "Data" and field_info.get("options") == "Email":
+                # Email validation
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, str(value)):
+                    errors.append(f"{field_info['label']} must be a valid email address")
+                    
+            elif field_info["fieldtype"] == "Data" and field_info.get("options") == "Phone":
+                # Phone validation
+                import re
+                phone_pattern = r'^[\d\s\-\+\(\)]{7,}$'
+                if not re.match(phone_pattern, str(value)):
+                    errors.append(f"{field_info['label']} must be a valid phone number")
+                    
+            elif field_info["fieldtype"] in ["Small Text", "Text", "Long Text", "Text Editor"]:
+                # Text fields - check if string
+                if not isinstance(value, str):
+                    warnings.append(f"{field_info['label']} will be converted to string")
+                    
+            elif field_info["fieldtype"] == "Table":
+                # Child table validation
+                if not isinstance(value, list):
+                    errors.append(f"{field_info['label']} must be a list of child records")
+                else:
+                    # Basic check for child records
+                    for idx, child in enumerate(value):
+                        if not isinstance(child, dict):
+                            errors.append(f"{field_info['label']}[{idx}] must be a dictionary")
+                            
+            # Length validation for string fields
+            if field_info.get("max_length") and isinstance(value, str):
+                if len(value) > field_info["max_length"]:
+                    errors.append(f"{field_info['label']} exceeds maximum length of {field_info['max_length']}")
+                    
+            # Pattern validation
+            if field_info.get("validation_pattern") and isinstance(value, str):
+                import re
+                if not re.match(field_info["validation_pattern"], value):
+                    errors.append(f"{field_info['label']} has invalid format")
+        
+        return {
+            "success": len(errors) == 0,
+            "message": "Validation passed" if len(errors) == 0 else "Validation failed",
+            "errors": errors,
+            "warnings": warnings,
+            "data": {
+                "errors_count": len(errors),
+                "warnings_count": len(warnings)
+            }
+        }
+        
+    except Exception as e:
         return {
             "success": False,
             "message": str(e)
