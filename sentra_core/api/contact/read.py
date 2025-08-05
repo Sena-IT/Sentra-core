@@ -3,33 +3,38 @@ from frappe import _
 from typing import Dict, List, Optional, Any
 import json
 
+# Import generic functions from read.py
+from sentra_core.api.read import get_linked_documents, get_communications
+
+
 @frappe.whitelist()
-def get_contact_with_details(contact_name: str) -> Dict[str, Any]:
+def get_contact_detail(contact_name: str) -> Dict[str, Any]:
     """
-    Get contact with enhanced details including calculated fields
+    Get detailed information about a single contact with enhanced data
     
     Args:
         contact_name: Contact ID/name
         
     Returns:
-        Enhanced contact data with computed fields
+        Complete contact information including linked data and computed fields
     """
     try:
         contact = frappe.get_doc("Contact", contact_name)
+        contact_dict = contact.as_dict()
         
-        # Use the enhanced get_formatted_data method
+        # Add computed fields if available
         if hasattr(contact, 'get_formatted_data'):
-            data = contact.get_formatted_data()
-        else:
-            data = contact.as_dict()
+            contact_dict = contact.get_formatted_data()
         
-        # Add recent activity
-        data['recent_communications'] = get_recent_communications(contact_name)
-        data['linked_documents'] = get_linked_documents(contact_name)
+        # Add recent communications
+        contact_dict['recent_communications'] = get_communications("Contact", contact_name)
+        
+        # Add linked documents
+        contact_dict['linked_documents'] = get_linked_documents("Contact", contact_name)
         
         return {
             "success": True,
-            "data": data
+            "data": contact_dict
         }
     except frappe.DoesNotExistError:
         return {
@@ -83,139 +88,6 @@ def get_contact_summary(contact_name: str) -> Dict[str, Any]:
             "success": False,
             "message": str(e)
         }
-
-
-@frappe.whitelist()
-def validate_contact_deletion(contact_name: str) -> Dict[str, Any]:
-    """
-    Check if contact can be safely deleted (dry-run validation)
-    
-    Args:
-        contact_name: Contact ID/name
-        
-    Returns:
-        Validation result with linked documents
-    """
-    try:
-        contact = frappe.get_doc("Contact", contact_name)
-        
-        # Get all linked documents
-        linked_docs = []
-        
-        # Check Dynamic Links
-        dynamic_links = frappe.get_all("Dynamic Link", 
-            filters={
-                "link_doctype": "Contact",
-                "link_name": contact_name
-            },
-            fields=["parent", "parenttype"]
-        )
-        
-        for link in dynamic_links:
-            linked_docs.append({
-                "doctype": link.parenttype,
-                "name": link.parent,
-                "type": "Dynamic Link"
-            })
-        
-        # Check if this contact is someone's manager
-        managed_contacts = frappe.get_all("Contact",
-            filters={"manager": contact_name, "name": ["!=", contact_name]},
-            fields=["name", "full_name"]
-        )
-        
-        for managed in managed_contacts:
-            linked_docs.append({
-                "doctype": "Contact",
-                "name": managed.name,
-                "title": managed.full_name,
-                "type": "Manager Reference"
-            })
-        
-        # Check communications
-        communications = frappe.get_all("Communication",
-            filters={"reference_doctype": "Contact", "reference_name": contact_name},
-            fields=["name", "subject", "communication_date"],
-            limit=5
-        )
-        
-        for comm in communications:
-            linked_docs.append({
-                "doctype": "Communication",
-                "name": comm.name,
-                "title": comm.subject,
-                "type": "Communication History"
-            })
-        
-        can_delete = len(linked_docs) == 0 or all(doc["type"] == "Communication History" for doc in linked_docs)
-        
-        return {
-            "success": True,
-            "data": {
-                "can_delete": can_delete,
-                "linked_documents": linked_docs,
-                "message": _("Contact can be safely deleted") if can_delete else _("Contact has dependencies that must be resolved first")
-            }
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": str(e)
-        }
-
-
-def get_recent_communications(contact_name: str) -> List[Dict[str, Any]]:
-    """Get recent communications for a contact"""
-    communications = frappe.get_all("Communication",
-        filters={
-            "reference_doctype": "Contact",
-            "reference_name": contact_name
-        },
-        fields=[
-            "name", "subject", "content", "communication_type",
-            "sent_or_received", "communication_date", "sender", "recipients"
-        ],
-        order_by="communication_date desc",
-        limit=10
-    )
-    
-    return communications
-
-
-def get_linked_documents(contact_name: str) -> List[Dict[str, Any]]:
-    """Get documents linked to this contact"""
-    linked = []
-    
-    # Get Dynamic Links with additional info
-    dynamic_links = frappe.get_all("Dynamic Link", 
-        filters={
-            "link_doctype": "Contact",
-            "link_name": contact_name
-        },
-        fields=["parent", "parenttype", "link_title"]
-    )
-    
-    for link in dynamic_links:
-        # Try to get title/name of linked document
-        try:
-            doc_data = frappe.db.get_value(link.parenttype, link.parent, 
-                ["name", "title", "subject", "customer_name", "supplier_name"], as_dict=True)
-            
-            title = (doc_data.get("title") or 
-                    doc_data.get("subject") or 
-                    doc_data.get("customer_name") or 
-                    doc_data.get("supplier_name") or 
-                    link.parent)
-        except:
-            title = link.parent
-        
-        linked.append({
-            "doctype": link.parenttype,
-            "name": link.parent,
-            "title": title
-        })
-    
-    return linked
 
 
 @frappe.whitelist()
@@ -275,6 +147,79 @@ def get_contact_hierarchy(contact_name: str) -> Dict[str, Any]:
                 "manager_chain": manager_chain,
                 "direct_reports": direct_reports,
                 "team_size": team_size
+            }
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": str(e)
+        }
+
+
+@frappe.whitelist()
+def validate_contact_deletion(contact_name: str) -> Dict[str, Any]:
+    """
+    Check if contact can be safely deleted (dry-run validation)
+    
+    Args:
+        contact_name: Contact ID/name
+        
+    Returns:
+        Validation result with linked documents
+    """
+    try:
+        contact = frappe.get_doc("Contact", contact_name)
+        
+        # Get all linked documents using generic function
+        linked_docs = get_linked_documents("Contact", contact_name)
+        
+        # Convert to expected format
+        formatted_linked_docs = []
+        for doc in linked_docs:
+            formatted_linked_docs.append({
+                "doctype": doc["doctype"],
+                "name": doc["name"],
+                "title": doc.get("title", doc["name"]),
+                "type": doc.get("link_type", "Link")
+            })
+        
+        # Check if this contact is someone's manager
+        managed_contacts = frappe.get_all("Contact",
+            filters={"manager": contact_name, "name": ["!=", contact_name]},
+            fields=["name", "full_name"]
+        )
+        
+        for managed in managed_contacts:
+            formatted_linked_docs.append({
+                "doctype": "Contact",
+                "name": managed.name,
+                "title": managed.full_name,
+                "type": "Manager Reference"
+            })
+        
+        # Check communications
+        communications = frappe.get_all("Communication",
+            filters={"reference_doctype": "Contact", "reference_name": contact_name},
+            fields=["name", "subject", "communication_date"],
+            limit=5
+        )
+        
+        for comm in communications:
+            formatted_linked_docs.append({
+                "doctype": "Communication",
+                "name": comm.name,
+                "title": comm.subject,
+                "type": "Communication History"
+            })
+        
+        can_delete = len(formatted_linked_docs) == 0 or all(doc["type"] == "Communication History" for doc in formatted_linked_docs)
+        
+        return {
+            "success": True,
+            "data": {
+                "can_delete": can_delete,
+                "linked_documents": formatted_linked_docs,
+                "message": _("Contact can be safely deleted") if can_delete else _("Contact has dependencies that must be resolved first")
             }
         }
     except Exception as e:

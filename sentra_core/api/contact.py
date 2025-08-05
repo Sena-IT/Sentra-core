@@ -5,9 +5,17 @@ import json
 import csv
 import io
 import base64
+import re
 from datetime import datetime
+from sentra_core.api.create import (
+    create_document,
+    bulk_upload_documents,
+    create_document_from_unstructured_data
+)
 
 # ============ CREATE APIs ============
+# Create APIs have been moved to api/create.py for generic doctype support
+# These are wrapper functions for backward compatibility
 
 @frappe.whitelist()
 def create_contact(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -20,31 +28,7 @@ def create_contact(data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Created contact document
     """
-    try:
-        # Parse data if it's a string
-        if isinstance(data, str):
-            data = json.loads(data)
-            
-        # Create contact document
-        contact = frappe.get_doc({
-            "doctype": "Contact",
-            **data
-        })
-        
-        contact.insert()
-        frappe.db.commit()
-        
-        return {
-            "success": True,
-            "message": _("Contact created successfully"),
-            "data": contact.as_dict()
-        }
-    except Exception as e:
-        frappe.db.rollback()
-        return {
-            "success": False,
-            "message": str(e)
-        }
+    return create_document("Contact", data)
 
 
 @frappe.whitelist()
@@ -59,57 +43,7 @@ def bulk_upload_contacts(file_content: str, file_type: str = "csv") -> Dict[str,
     Returns:
         Upload results with success/failure counts
     """
-    try:
-        import base64
-        import pandas as pd
-        
-        # Decode file content
-        decoded = base64.b64decode(file_content)
-        
-        # Parse based on file type
-        if file_type == "csv":
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-        else:
-            df = pd.read_excel(io.BytesIO(decoded))
-            
-        success_count = 0
-        errors = []
-        
-        for idx, row in df.iterrows():
-            try:
-                contact_data = row.to_dict()
-                # Remove NaN values
-                contact_data = {k: v for k, v in contact_data.items() if pd.notna(v)}
-                
-                contact = frappe.get_doc({
-                    "doctype": "Contact",
-                    **contact_data
-                })
-                contact.insert()
-                success_count += 1
-            except Exception as e:
-                errors.append({
-                    "row": idx + 2,  # +2 for header and 0-index
-                    "error": str(e)
-                })
-                
-        frappe.db.commit()
-        
-        return {
-            "success": True,
-            "message": _(f"Uploaded {success_count} contacts successfully"),
-            "data": {
-                "success_count": success_count,
-                "error_count": len(errors),
-                "errors": errors[:10]  # Return first 10 errors
-            }
-        }
-    except Exception as e:
-        frappe.db.rollback()
-        return {
-            "success": False,
-            "message": str(e)
-        }
+    return bulk_upload_documents("Contact", file_content, file_type)
 
 
 @frappe.whitelist()
@@ -124,36 +58,12 @@ def create_contact_from_ai(unstructured_data: str, data_type: str = "text") -> D
     Returns:
         Created contact or parsed data for review
     """
-    try:
-        # This is a placeholder - integrate with your AI service
-        # For now, implement basic parsing logic
-        
-        parsed_data = {
-            "doctype": "Contact"
-        }
-        
-        # Basic parsing example
-        lines = unstructured_data.strip().split('\n')
-        for line in lines:
-            line = line.strip()
-            if '@' in line:  # Email
-                parsed_data['email_id'] = line
-            elif line.startswith('+') or any(char.isdigit() for char in line):  # Phone
-                if len([char for char in line if char.isdigit()]) >= 10:
-                    parsed_data['mobile_no'] = line
-            # Add more parsing logic as needed
-            
-        return {
-            "success": True,
-            "message": _("Data parsed successfully"),
-            "data": parsed_data,
-            "require_confirmation": True  # Frontend should confirm before creating
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": str(e)
-        }
+    # Contact-specific parsing rules
+    parsing_rules = {
+        "email_id": {"pattern": r"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"},
+        "mobile_no": {"pattern": r"(\+?\d[\d\s\-\(\)]{9,})"},
+    }
+    return create_document_from_unstructured_data("Contact", unstructured_data, data_type, parsing_rules)
 
 
 # ============ READ APIs ============
@@ -181,132 +91,35 @@ def get_contacts(
     Returns:
         Paginated list of contacts
     """
-    try:
-        # Parse parameters if they're strings
-        if isinstance(filters, str):
-            filters = json.loads(filters) if filters else {}
-        if isinstance(fields, str):
-            fields = json.loads(fields) if fields else None
-            
-        # Default fields if not specified
-        if not fields:
-            fields = [
-                "name", "full_name", "first_name", "last_name", 
-                "email_id", "mobile_no", "contact_type", "contact_category",
-                "city", "state", "modified", "creation"
-            ]
-            
-        # Build filters for Frappe API
-        api_filters = filters.copy() if filters else {}
-        
-        # Handle search text
-        or_filters = []
-        if search_text:
-            search_fields = ["full_name", "email_id", "mobile_no", "city"]
-            for field in search_fields:
-                or_filters.append([field, "like", f"%{search_text}%"])
-        
-        # Get total count
-        count_filters = api_filters.copy()
-        if or_filters:
-            # Frappe's get_all with or_filters
-            total_count = len(frappe.get_all("Contact",
-                filters=count_filters,
-                or_filters=or_filters,
-                pluck="name"
-            ))
-        else:
-            total_count = frappe.db.count("Contact", filters=count_filters)
-        
-        # Get paginated results
-        offset = (page - 1) * page_size
-        
-        if or_filters:
-            contacts = frappe.get_all("Contact",
-                filters=api_filters,
-                or_filters=or_filters,
-                fields=fields,
-                order_by=order_by,
-                start=offset,
-                page_length=page_size
-            )
-        else:
-            contacts = frappe.get_all("Contact",
-                filters=api_filters,
-                fields=fields,
-                order_by=order_by,
-                start=offset,
-                page_length=page_size
-            )
-        
-        return {
-            "success": True,
-            "data": {
-                "contacts": contacts,
-                "pagination": {
-                    "total": total_count,
-                    "page": page,
-                    "page_size": page_size,
-                    "total_pages": (total_count + page_size - 1) // page_size
-                }
-            }
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": str(e)
-        }
-
-
-@frappe.whitelist()
-def get_contact_detail(contact_name: str) -> Dict[str, Any]:
-    """
-    Get detailed information about a single contact
+    # Use the generic list API
+    from sentra_core.api.read import get_list
     
-    Args:
-        contact_name: Contact ID/name
-        
-    Returns:
-        Complete contact information including linked data
-    """
-    try:
-        contact = frappe.get_doc("Contact", contact_name)
-        contact_dict = contact.as_dict()
-        
-        # Add linked information
-        # Get linked documents
-        links = frappe.get_all("Dynamic Link", 
-            filters={
-                "link_doctype": "Contact",
-                "link_name": contact_name
-            },
-            fields=["parent", "parenttype", "link_doctype", "link_name"]
-        )
-        
-        contact_dict["linked_documents"] = links
-        
-        # Get activities/communications
-        communications = frappe.get_all("Communication",
-            filters={
-                "reference_doctype": "Contact",
-                "reference_name": contact_name
-            },
-            fields=["name", "subject", "sent_or_received", "communication_date"],
-            order_by="communication_date desc",
-            limit=10
-        )
-        
-        contact_dict["recent_communications"] = communications
-        
-        return {
-            "success": True,
-            "data": contact_dict
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": str(e)
-        }
+    # If no fields specified, use Contact-specific defaults
+    if not fields:
+        fields = [
+            "name", "full_name", "first_name", "last_name", 
+            "email_id", "mobile_no", "contact_type", "contact_category",
+            "city", "state", "modified", "creation"
+        ]
+    
+    result = get_list(
+        doctype="Contact",
+        filters=filters,
+        fields=fields,
+        order_by=order_by,
+        page=page,
+        page_size=page_size,
+        search_text=search_text
+    )
+    
+    # Rename "documents" to "contacts" for backward compatibility
+    if result.get("success") and "data" in result:
+        result["data"]["contacts"] = result["data"].pop("documents", [])
+    
+    return result
+
+
+# Contact detail functions moved to api/contact/read.py
 
 
 @frappe.whitelist()
