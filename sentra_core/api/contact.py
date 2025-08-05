@@ -196,49 +196,48 @@ def get_contacts(
                 "city", "state", "modified", "creation"
             ]
             
-        # Build filters
-        conditions = []
-        if filters:
-            for field, value in filters.items():
-                if isinstance(value, list):
-                    conditions.append(f"`{field}` IN ({','.join(['%s']*len(value))})")
-                else:
-                    conditions.append(f"`{field}` = %s")
-                    
-        # Add search condition
+        # Build filters for Frappe API
+        api_filters = filters.copy() if filters else {}
+        
+        # Handle search text
+        or_filters = []
         if search_text:
             search_fields = ["full_name", "email_id", "mobile_no", "city"]
-            search_conditions = " OR ".join([f"`{field}` LIKE %s" for field in search_fields])
-            conditions.append(f"({search_conditions})")
-            
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
+            for field in search_fields:
+                or_filters.append([field, "like", f"%{search_text}%"])
         
         # Get total count
-        count_query = f"SELECT COUNT(*) FROM `tabContact` WHERE {where_clause}"
-        values = []
-        if filters:
-            for value in filters.values():
-                if isinstance(value, list):
-                    values.extend(value)
-                else:
-                    values.append(value)
-        if search_text:
-            values.extend([f"%{search_text}%"] * len(search_fields))
-            
-        total_count = frappe.db.sql(count_query, values)[0][0]
+        count_filters = api_filters.copy()
+        if or_filters:
+            # Frappe's get_all with or_filters
+            total_count = len(frappe.get_all("Contact",
+                filters=count_filters,
+                or_filters=or_filters,
+                pluck="name"
+            ))
+        else:
+            total_count = frappe.db.count("Contact", filters=count_filters)
         
         # Get paginated results
         offset = (page - 1) * page_size
-        query = f"""
-            SELECT {','.join([f'`{field}`' for field in fields])}
-            FROM `tabContact`
-            WHERE {where_clause}
-            ORDER BY {order_by}
-            LIMIT %s OFFSET %s
-        """
-        values.extend([page_size, offset])
         
-        contacts = frappe.db.sql(query, values, as_dict=True)
+        if or_filters:
+            contacts = frappe.get_all("Contact",
+                filters=api_filters,
+                or_filters=or_filters,
+                fields=fields,
+                order_by=order_by,
+                start=offset,
+                page_length=page_size
+            )
+        else:
+            contacts = frappe.get_all("Contact",
+                filters=api_filters,
+                fields=fields,
+                order_by=order_by,
+                start=offset,
+                page_length=page_size
+            )
         
         return {
             "success": True,
@@ -346,8 +345,8 @@ def search_contacts_ai(query: str) -> Dict[str, Any]:
             filters["contact_type"] = "Employee"
             
         # Status matching
-        if "inactive" in query_lower:
-            filters["status"] = "Inactive"
+        if "inactive" in query_lower or "passive" in query_lower:
+            filters["status"] = "Passive"
         elif "active" in query_lower:
             filters["status"] = "Active"
             

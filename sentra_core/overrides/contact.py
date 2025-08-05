@@ -27,56 +27,60 @@ def validate_delete_permissions(doc):
 	# Check if contact is linked to other documents
 	linked_docs = []
 	
-	# Check Dynamic Links
-	dynamic_links = frappe.get_all("Dynamic Link", 
-		filters={
-			"link_doctype": "Contact",
-			"link_name": doc.name
-		},
-		fields=["parent", "parenttype"]
-	)
-	
-	for link in dynamic_links:
-		linked_docs.append(f"{link.parenttype}: {link.parent}")
-	
-	# Check if contact is referenced in other doctypes
-	reference_checks = [
-		("User", "name", "contact_name"),
-		("Communication", "reference_name", "reference_doctype"),
-		("Contact", "manager", None),  # Check if this contact is a manager
-	]
-	
-	for doctype, field, condition_field in reference_checks:
-		if condition_field:
-			# Special case for Communication
-			refs = frappe.get_all(doctype,
-				filters={field: doc.name, condition_field: "Contact"},
-				fields=["name"]
-			)
-		elif doctype == "Contact":
-			# Check if this contact is someone's manager
-			refs = frappe.get_all(doctype,
-				filters={field: doc.name, "name": ["!=", doc.name]},
-				fields=["name", "full_name"]
-			)
-		else:
-			refs = frappe.get_all(doctype,
-				filters={field: doc.name},
-				fields=["name"]
-			)
+	try:
+		# Check Dynamic Links
+		dynamic_links = frappe.get_all("Dynamic Link", 
+			filters={
+				"link_doctype": "Contact",
+				"link_name": doc.name
+			},
+			fields=["parent", "parenttype"]
+		)
 		
-		for ref in refs:
-			if doctype == "Contact":
-				linked_docs.append(f"Manager of: {ref.full_name} ({ref.name})")
-			else:
-				linked_docs.append(f"{doctype}: {ref.name}")
+		for link in dynamic_links:
+			linked_docs.append(f"{link.parenttype}: {link.parent}")
 	
-	# If there are linked documents, warn or prevent deletion
-	if linked_docs:
-		if len(linked_docs) > 10:
-			linked_summary = linked_docs[:10] + [f"... and {len(linked_docs) - 10} more"]
+	except Exception as e:
+		frappe.log_error(f"Error checking dynamic links: {str(e)}")
+	
+	try:
+		# Check if this contact is someone's manager
+		managed_contacts = frappe.get_all("Contact",
+			filters={"manager": doc.name, "name": ["!=", doc.name]},
+			fields=["name", "full_name"]
+		)
+		
+		for managed in managed_contacts:
+			linked_docs.append(f"Manager of: {managed.full_name} ({managed.name})")
+	
+	except Exception as e:
+		frappe.log_error(f"Error checking manager references: {str(e)}")
+	
+	try:
+		# Check communications (but don't block deletion for these)
+		communications = frappe.get_all("Communication",
+			filters={"reference_doctype": "Contact", "reference_name": doc.name},
+			limit=1
+		)
+		
+		if communications:
+			# Just log but don't prevent deletion
+			frappe.msgprint(
+				_("Contact has communication history which will be preserved."),
+				indicator="orange"
+			)
+	
+	except Exception as e:
+		frappe.log_error(f"Error checking communications: {str(e)}")
+	
+	# Only prevent deletion for critical links
+	critical_links = [link for link in linked_docs if not link.startswith("Communication:")]
+	
+	if critical_links:
+		if len(critical_links) > 10:
+			linked_summary = critical_links[:10] + [f"... and {len(critical_links) - 10} more"]
 		else:
-			linked_summary = linked_docs
+			linked_summary = critical_links
 			
 		frappe.throw(
 			_("Cannot delete Contact {0}. It is linked to:\n{1}\n\nPlease remove these references first.").format(
@@ -303,21 +307,20 @@ class CustomContact(Contact):
 	def validate_contact_type(self):
 		"""Validate contact type and category relationship"""
 		if self.contact_type and self.contact_category:
-			# Add logic to validate category is valid for the type
+			# Define valid categories for each contact type
 			valid_categories = {
-				"Customer": ["Individual", "Corporate", "Government"],
-				"Vendor": ["Airline", "Hotel", "Transport", "Other"],
-				"Employee": ["Full-time", "Part-time", "Contractor"],
-				"Partner": ["Business Partner", "Travel Agent"]
+				"Customer": ["Individual", "Organization"],
+				"Vendor": ["Individual", "Organization"],
+				"Employee": ["User", "Non-User"]
 			}
 			
 			if self.contact_type in valid_categories:
-				category_doc = frappe.get_value("Contact Category", self.contact_category, "name")
-				if category_doc and self.contact_category not in valid_categories.get(self.contact_type, []):
-					# Allow any existing category for now, just log warning
+				valid_cats = valid_categories.get(self.contact_type, [])
+				if self.contact_category not in valid_cats:
+					# Show warning for invalid category combinations
 					frappe.msgprint(
-						_("Contact Category {0} may not be typical for Contact Type {1}").format(
-							self.contact_category, self.contact_type
+						_("Contact Category '{0}' is not typical for Contact Type '{1}'. Expected categories are: {2}").format(
+							self.contact_category, self.contact_type, ", ".join(valid_cats)
 						),
 						indicator="orange"
 					)
@@ -463,92 +466,3 @@ class CustomContact(Contact):
 		# If still no full name, use email or mobile
 		if not self.full_name:
 			self.full_name = self.email_id or self.mobile_no or "Unnamed Contact"
-
-	@staticmethod
-	def default_list_data():
-		columns = [
-			{
-				"label": "Full Name",
-				"type": "Data",
-				"key": "full_name",
-				"width": "10rem",
-			},
-			{
-				"label": "Contact Type",
-				"type": "Link",
-				"key": "contact_type",
-				"width": "8rem",
-			},
-			{
-				"label": "Contact Category",
-				"type": "Link",
-				"key": "contact_category",
-				"width": "8rem",
-			},
-			{
-				"label": "Email",
-				"type": "Data",
-				"key": "email_id",
-				"width": "10rem",
-			},
-			{
-				"label": "Mobile",
-				"type": "Data",
-				"key": "mobile_no",
-				"width": "8rem",
-			},
-			{
-				"label": "City",
-				"type": "Data",
-				"key": "city",
-				"width": "8rem",
-			},
-		]
-		rows = [
-			"name",
-			"full_name",
-			"contact_type",
-			"contact_category",
-			"email_id",
-			"mobile_no",
-			"image",
-			"_user_tags",
-			"_assign",
-			"_liked_by",
-			"modified",
-		]
-		return {"columns": columns, "rows": rows}
-
-	@staticmethod
-	def get_available_columns():
-		"""Return only the fields that should be available in the column selector"""
-		# Only include fields that are actually being populated by our frontend
-		available_fields = [
-			{"fieldname": "full_name", "label": "Full Name", "fieldtype": "Data"},
-			{"fieldname": "first_name", "label": "First Name", "fieldtype": "Data"},
-			{"fieldname": "last_name", "label": "Last Name", "fieldtype": "Data"},
-			{"fieldname": "contact_type", "label": "Contact Type", "fieldtype": "Link"},
-			{"fieldname": "contact_category", "label": "Contact Category", "fieldtype": "Link"},
-			{"fieldname": "email_id", "label": "Email", "fieldtype": "Data"},
-			{"fieldname": "mobile_no", "label": "Mobile", "fieldtype": "Data"},
-			# {"fieldname": "phone", "label": "Phone", "fieldtype": "Data"},
-			{"fieldname": "instagram", "label": "Instagram", "fieldtype": "Data"},
-			{"fieldname": "dob", "label": "Date of Birth", "fieldtype": "Date"},
-			{"fieldname": "notes", "label": "Notes", "fieldtype": "Long Text"},
-			{"fieldname": "_user_tags", "label": "Tags", "fieldtype": "Data"},
-			{"fieldname": "_assign", "label": "Assigned To", "fieldtype": "Text"},
-			{"fieldname": "_liked_by", "label": "Like", "fieldtype": "Data"},
-			{"fieldname": "address_line1", "label": "Address Line 1", "fieldtype": "Data"},
-			{"fieldname": "city", "label": "City", "fieldtype": "Data"},
-			{"fieldname": "state", "label": "State", "fieldtype": "Data"},
-			{"fieldname": "country", "label": "Country", "fieldtype": "Data"},
-			# {"fieldname": "organization_name", "label": "Organization Name", "fieldtype": "Data"},
-			# {"fieldname": "designation", "label": "Designation", "fieldtype": "Data"},
-			# {"fieldname": "company_name", "label": "Company Name", "fieldtype": "Data"},
-			# {"fieldname": "gender", "label": "Gender", "fieldtype": "Link"},
-			# {"fieldname": "department", "label": "Department", "fieldtype": "Data"},
-			{"fieldname": "modified", "label": "Last Modified", "fieldtype": "Datetime"},
-			{"fieldname": "creation", "label": "Created On", "fieldtype": "Datetime"},
-			{"fieldname": "owner", "label": "Created By", "fieldtype": "Link"},
-		]
-		return available_fields

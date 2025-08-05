@@ -259,8 +259,8 @@ def bulk_delete_contacts(contact_names: List[str], force_delete: bool = False) -
                 # Check dependencies unless force delete
                 if not force_delete:
                     # Use our existing validation
-                    from sentra_core.overrides.contact import validate_delete_permissions
                     try:
+                        from sentra_core.overrides.contact import validate_delete_permissions
                         validate_delete_permissions(contact)
                     except Exception as validation_error:
                         results["failed_count"] += 1
@@ -341,32 +341,13 @@ def bulk_export_contacts(
                 "creation", "modified"
             ]
         
-        # Build query conditions
-        conditions = ["1=1"]
-        values = []
-        
-        if filters:
-            for field, value in filters.items():
-                if isinstance(value, list):
-                    placeholders = ",".join(["%s"] * len(value))
-                    conditions.append(f"`{field}` IN ({placeholders})")
-                    values.extend(value)
-                else:
-                    conditions.append(f"`{field}` = %s")
-                    values.append(value)
-        
-        where_clause = " AND ".join(conditions)
-        
-        # Get data with limit for safety
-        query = f"""
-            SELECT {','.join([f'`{field}`' for field in fields])}
-            FROM `tabContact`
-            WHERE {where_clause}
-            ORDER BY modified DESC
-            LIMIT 10000
-        """
-        
-        contacts = frappe.db.sql(query, values, as_dict=True)
+        # Get data using Frappe API
+        contacts = frappe.get_all("Contact",
+            filters=filters or {},
+            fields=fields,
+            order_by="modified desc",
+            limit=10000
+        )
         
         if format.lower() == "csv":
             # Generate CSV
