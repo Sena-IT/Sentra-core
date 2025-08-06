@@ -262,7 +262,6 @@ override_whitelisted_methods = {
 # Fixtures
 # --------
 fixtures = [
-    "custom_fields",
     {
         "dt": "Custom Field",
         "filters": [

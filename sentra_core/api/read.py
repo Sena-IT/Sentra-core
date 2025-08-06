@@ -830,7 +830,14 @@ def get_list_fields(doctype: str) -> Dict[str, Any]:
                    "in_list_view", "in_standard_filter", "in_global_search", "depends_on"]
         )
         
+        # Create a set of existing fieldnames to avoid duplicates
+        existing_fieldnames = {field["fieldname"] for field in doc_fields}
+        
         for field in custom_fields:
+            # Skip if this field already exists in doc_fields
+            if field.fieldname in existing_fieldnames:
+                continue
+                
             if field.fieldtype not in excluded_fieldtypes:
                 field_info = {
                     "fieldname": field.fieldname,
