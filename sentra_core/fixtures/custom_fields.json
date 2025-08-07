@@ -41,11 +41,21 @@
     {
         "dt": "Contact",
         "doctype": "Custom Field",
+        "name": "Contact-source",
+        "fieldname": "source",
+        "fieldtype": "Link",
+        "label": "Source",
+        "options": "CRM Lead Source",
+        "insert_after": "dob"
+    },
+    {
+        "dt": "Contact",
+        "doctype": "Custom Field",
         "name": "Contact-notes",
         "fieldname": "notes",
         "fieldtype": "Long Text",
         "label": "Notes",
-        "insert_after": "dob"
+        "insert_after": "source"
     },
     {
         "dt": "Contact",
