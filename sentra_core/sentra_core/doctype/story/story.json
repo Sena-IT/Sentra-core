@@ -1,0 +1,155 @@
+{
+ "actions": [],
+ "allow_import": 0,
+ "allow_rename": 0,
+ "autoname": "field:contact",
+ "creation": "2025-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "contact",
+  "stage",
+  "primary_trip",
+  "summary",
+  "story_digest",
+  "itineraries_section",
+  "itineraries",
+  "facts_section",
+  "facts",
+  "evidence_section",
+  "evidence",
+  "meta_section",
+  "story_version",
+  "last_built_at",
+  "last_touch_from",
+  "last_touch_reason"
+ ],
+ "fields": [
+  {
+   "fieldname": "contact",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Contact",
+   "options": "Contact",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Select",
+   "label": "Stage",
+   "options": "Inquiry\nDiscovery\nProposal\nNegotiation\nBooking\nFulfillment\nPost-trip",
+   "default": "Inquiry",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "primary_trip",
+   "fieldtype": "Link",
+   "label": "Primary Trip",
+   "options": "Trip",
+   "read_only": 1
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "story_digest",
+   "fieldtype": "Long Text",
+   "label": "Story Digest",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:1==1",
+   "fieldname": "itineraries_section",
+   "fieldtype": "Section Break",
+   "label": "Itineraries"
+  },
+  {
+   "fieldname": "itineraries",
+   "fieldtype": "Table",
+   "label": "Itineraries",
+   "options": "Story Itinerary Link",
+   "read_only": 1
+  },
+  {
+   "fieldname": "facts_section",
+   "fieldtype": "Section Break",
+   "label": "Facts"
+  },
+  {
+   "fieldname": "facts",
+   "fieldtype": "Table",
+   "label": "Facts",
+   "options": "Story Fact",
+   "read_only": 1
+  },
+  {
+   "fieldname": "evidence_section",
+   "fieldtype": "Section Break",
+   "label": "Evidence"
+  },
+  {
+   "fieldname": "evidence",
+   "fieldtype": "Table",
+   "label": "Evidence",
+   "options": "Story Evidence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "meta_section",
+   "fieldtype": "Section Break",
+   "label": "Meta"
+  },
+  {
+   "fieldname": "story_version",
+   "fieldtype": "Int",
+   "label": "Story Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_built_at",
+   "fieldtype": "Datetime",
+   "label": "Last Built At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_touch_from",
+   "fieldtype": "Select",
+   "label": "Last Touch From",
+   "options": "bot\nhuman\nsystem",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_touch_reason",
+   "fieldtype": "Data",
+   "label": "Last Touch Reason",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Sentra Core",
+ "name": "Story",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "role": "All"
+  }
+ ],
+ "quick_entry": 0,
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "contact"
+}

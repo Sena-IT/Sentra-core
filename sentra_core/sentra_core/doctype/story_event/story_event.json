@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:SE-{####}",
+ "creation": "2025-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 0,
+ "engine": "InnoDB",
+ "field_order": [
+  "contact",
+  "event_type",
+  "source_section",
+  "source_doctype",
+  "source_ref",
+  "diff",
+  "actor",
+  "created_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "contact",
+   "fieldtype": "Link",
+   "label": "Contact",
+   "options": "Contact",
+   "reqd": 1,
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Select",
+   "label": "Event Type",
+   "options": "communication_created\nbusiness_object_updated\nplaybook_changed\nidentity_resolved\naction_taken\nsystem_rebuild",
+   "reqd": 1,
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_ref",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Ref",
+   "options": "source_doctype",
+   "read_only": 1
+  },
+  {
+   "fieldname": "diff",
+   "fieldtype": "Long Text",
+   "label": "Diff",
+   "read_only": 1
+  },
+  {
+   "fieldname": "actor",
+   "fieldtype": "Select",
+   "label": "Actor",
+   "options": "bot\nhuman\nsystem",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "default": "Now",
+   "fieldname": "created_at",
+   "fieldtype": "Datetime",
+   "label": "Created At",
+   "reqd": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 20,
+ "has_web_view": 0,
+ "links": [],
+ "modified": "2025-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Sentra Core",
+ "name": "Story Event",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "export": 1,
+   "print": 1,
+   "role": "All"
+  }
+ ],
+ "quick_entry": 0,
+ "row_format": "Dynamic",
+ "submittable": 0,
+ "track_changes": 1
+}
+

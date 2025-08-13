@@ -160,8 +160,17 @@ doc_events = {
         "before_delete": "sentra_core.overrides.contact.before_delete"
     },
     "Communication": {
-        "validate": "sentra_core.overrides.communication.validate"
-    }
+        "validate": "sentra_core.overrides.communication.validate",
+        "after_insert": "sentra_core.story.engine.update_from_comm",
+    },
+    "Trip": {
+        "after_insert": "sentra_core.story.engine.update_from_business",
+        "on_update": "sentra_core.story.engine.update_from_business",
+    },
+    "Itinerary": {
+        "after_insert": "sentra_core.story.engine.update_from_business",
+        "on_update": "sentra_core.story.engine.update_from_business",
+    },
 }
 
 # Scheduled Tasks
